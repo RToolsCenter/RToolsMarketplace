@@ -1,0 +1,99 @@
+openapi: 3.0.3
+info: { title: RTools Plugin Marketplace API, version: 0.8.0 }
+servers: [{ url: 'http://localhost:8787' }]
+components:
+  securitySchemes:
+    DeveloperToken: { type: http, scheme: bearer }
+    AdminSession: { type: http, scheme: bearer }
+  schemas:
+    Error: { type: object, required: [code,message,requestId], properties: { code: {type: string}, message: {type: string}, requestId: {type: string} } }
+    MarketMetadata:
+      type: object
+      required: [protocolVersion,marketId,name,publicKeys]
+      properties:
+        protocolVersion: { type: integer, enum: [1] }
+        marketId: { type: string, example: official.rtools.app }
+        name: { type: string }
+        baseUrl: { type: string, format: uri }
+        publicKeys:
+          type: array
+          items:
+            type: object
+            required: [keyId,algorithm,publicKey]
+            properties:
+              keyId: { type: string }
+              algorithm: { type: string, enum: [Ed25519] }
+              publicKey: { type: string }
+        capabilities: { type: array, items: { type: string } }
+    MarketSignature:
+      type: object
+      required: [algorithm,marketId,keyId,pluginId,version,packageSha256,signature]
+      properties:
+        algorithm: { type: string, enum: [Ed25519] }
+        marketId: { type: string }
+        keyId: { type: string }
+        pluginId: { type: string }
+        version: { type: string }
+        packageSha256: { type: string }
+        developerSignature: { type: object, nullable: true }
+        signature: { type: string, description: Base64 Ed25519 signature over packageSha256 bytes }
+paths:
+  /health:
+    get: { summary: Database and API health, responses: { '200': {description: Healthy} } }
+  /api/v1/auth/register:
+    post: { summary: Register developer and issue API token, responses: { '201': {description: Registered}, '409': {description: Email exists} } }
+  /api/v1/admin/login:
+    post: { summary: Create an eight-hour administrator session, responses: { '200': {description: Authenticated}, '401': {description: Invalid credentials} } }
+  /api/v1/market/metadata:
+    get: { summary: Marketplace identity, public keys and capabilities, responses: { '200': {description: Market metadata, content: { application/json: { schema: { $ref: '#/components/schemas/MarketMetadata' } } } } }
+  /api/v1/market/public-keys:
+    get: { summary: Marketplace signing public keys, responses: { '200': {description: Public keys} } }
+  /api/v1/revocations:
+    get: { summary: Revoked plugin versions, developer keys or market keys, responses: { '200': {description: Revocation list} } }
+  /api/v1/protocol/schema:
+    get: { summary: Manifest JSON Schema, responses: { '200': {description: Schema} } }
+  /api/v1/protocol/permissions:
+    get: { summary: Permission registry, responses: { '200': {description: Registry} } }
+  /api/v1/protocol/market-key:
+    get: { summary: Legacy marketplace Ed25519 public key, deprecated: true, responses: { '200': {description: Public key} } }
+  /api/v1/plugins:
+    get:
+      summary: Search published plugins
+      parameters: [{name: q,in: query,schema: {type: string}},{name: category,in: query,schema: {type: string}},{name: tag,in: query,schema: {type: string}}]
+      responses: { '200': {description: Catalog} }
+  /api/v1/categories:
+    get: { summary: List plugin categories, responses: { '200': {description: Categories} } }
+  /api/v1/tags:
+    get: { summary: List plugin tags, responses: { '200': {description: Tags} } }
+  /api/v1/plugins/{pluginId}:
+    get: { summary: Published plugin detail, parameters: [{name: pluginId,in: path,required: true,schema: {type: string}}], responses: { '200': {description: Plugin}, '404': {description: Not found} } }
+  /api/v1/plugins/{pluginId}/updates:
+    get: { summary: Check compatible update, parameters: [{name: pluginId,in: path,required: true,schema: {type: string}},{name: currentVersion,in: query,required: true,schema: {type: string}},{name: hostVersion,in: query,required: true,schema: {type: string}}], responses: { '200': {description: Update result} } }
+  /api/v1/plugins/{pluginId}/versions/{version}/download:
+    get: { summary: Download signed package and increment counter, parameters: [{name: pluginId,in: path,required: true,schema: {type: string}},{name: version,in: path,required: true,schema: {type: string}}], responses: { '200': {description: RTools package}, '404': {description: Not found} } }
+  /api/v1/plugins/{pluginId}/ratings:
+    post: { summary: Create or update rating, parameters: [{name: pluginId,in: path,required: true,schema: {type: string}}], responses: { '201': {description: Saved} } }
+  /api/v1/plugins/{pluginId}/reports:
+    post: { summary: Report malicious or abusive plugin, parameters: [{name: pluginId,in: path,required: true,schema: {type: string}}], responses: { '201': {description: Reported} } }
+  /api/v1/developer/plugins:
+    get: { summary: Developer plugin list, security: [{DeveloperToken: []}], responses: { '200': {description: Plugins} } }
+  /api/v1/developer/plugins/{pluginId}/versions/preflight:
+    post: { summary: Validate metadata before upload, security: [{DeveloperToken: []}], parameters: [{name: pluginId,in: path,required: true,schema: {type: string}}], responses: { '200': {description: Valid}, '422': {description: Invalid} } }
+  /api/v1/developer/plugins/{pluginId}/versions/{version}/package:
+    put: { summary: Upload binary package, description: Recomputes SHA-256, safely parses ZIP and submits for review., security: [{DeveloperToken: []}], parameters: [{name: pluginId,in: path,required: true,schema: {type: string}},{name: version,in: path,required: true,schema: {type: string}},{name: x-package-sha256,in: header,required: true,schema: {type: string}},{name: x-developer-signature,in: header,schema: {type: string}}], responses: { '201': {description: Uploaded and scanned}, '422': {description: Rejected} } }
+  /api/v1/admin/versions:
+    get: { summary: Review queue, security: [{AdminSession: []}], responses: { '200': {description: Versions} } }
+  /api/v1/admin/versions/{versionId}/review:
+    post: { summary: Approve or reject version, security: [{AdminSession: []}], parameters: [{name: versionId,in: path,required: true,schema: {type: string}}], responses: { '200': {description: Reviewed} } }
+  /api/v1/admin/versions/{versionId}/publish:
+    post: { summary: Publish approved version and create market signature, security: [{AdminSession: []}], parameters: [{name: versionId,in: path,required: true,schema: {type: string}}], responses: { '200': {description: Published} } }
+  /api/v1/admin/versions/{versionId}/unpublish:
+    post: { summary: Unpublish version, security: [{AdminSession: []}], parameters: [{name: versionId,in: path,required: true,schema: {type: string}}], responses: { '200': {description: Unpublished} } }
+  /api/v1/admin/developers:
+    get: { summary: Developer accounts, security: [{AdminSession: []}], responses: { '200': {description: Developers} } }
+  /api/v1/admin/reports:
+    get: { summary: Abuse reports, security: [{AdminSession: []}], responses: { '200': {description: Reports} } }
+  /api/v1/admin/audit:
+    get: { summary: Audit log, security: [{AdminSession: []}], responses: { '200': {description: Audit records} } }
+  /api/v1/admin/plugins/{pluginId}/trust:
+    put: { summary: Set plugin trust level, security: [{AdminSession: []}], parameters: [{name: pluginId,in: path,required: true,schema: {type: string}}], responses: { '200': {description: Updated}, '422': {description: Invalid trust level} } }

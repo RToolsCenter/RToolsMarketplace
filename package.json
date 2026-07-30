@@ -1,0 +1,1 @@
+{"name":"rtools-marketplace","version":"0.7.0","private":true,"type":"module","scripts":{"start":"node src/server.js","migrate":"node scripts/migrate.js","test":"node --test"},"dependencies":{"@aws-sdk/client-s3":"^3.864.0","ajv":"^8.17.1","ajv-formats":"^3.0.1","mysql2":"^3.14.3","unzipper":"^0.12.3"},"engines":{"node":">=20"}}

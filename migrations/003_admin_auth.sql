@@ -1,0 +1,4 @@
+USE rtools_marketplace;
+CREATE TABLE IF NOT EXISTS admin_users (id CHAR(36) PRIMARY KEY,username VARCHAR(80) NOT NULL UNIQUE,password_hash VARCHAR(255) NOT NULL,role ENUM('reviewer','admin','super_admin') NOT NULL DEFAULT 'reviewer',status ENUM('active','suspended') NOT NULL DEFAULT 'active',created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)) ENGINE=InnoDB;
+CREATE TABLE IF NOT EXISTS admin_sessions (id CHAR(36) PRIMARY KEY,admin_id CHAR(36) NOT NULL,token_hash CHAR(64) NOT NULL UNIQUE,expires_at TIMESTAMP(3) NOT NULL,revoked_at TIMESTAMP(3) NULL,created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),FOREIGN KEY(admin_id) REFERENCES admin_users(id) ON DELETE CASCADE,INDEX idx_admin_session_expiry(expires_at)) ENGINE=InnoDB;
+INSERT IGNORE INTO schema_migrations(version) VALUES ('003_admin_auth');

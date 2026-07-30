@@ -1,0 +1,65 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: rtools-marketplace-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: my888888
+      MYSQL_DATABASE: rtools_marketplace
+      MYSQL_USER: rtools
+      MYSQL_PASSWORD: rtools
+      TZ: Asia/Shanghai
+    ports: ["3306:3306"]
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_0900_ai_ci"]
+    volumes:
+      - rtools_mysql_data:/var/lib/mysql
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-pmy888888"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  api:
+    image: node:22-alpine
+    working_dir: /workspace/RToolsMarketplace
+    command: sh -c "npm install && npm start"
+    environment:
+      PORT: 8787
+      DATABASE_URL: mysql://rtools:rtools@mysql:3306/rtools_marketplace
+      MARKETPLACE_ADMIN_TOKEN: rtools_admin_local
+      MARKETPLACE_ADMIN_USER: admin
+      MARKETPLACE_ADMIN_PASSWORD: admin888888
+      MARKETPLACE_SIGNING_KEY: /keys/marketplace-ed25519.pem
+      S3_ENDPOINT: http://minio:9000
+      S3_REGION: us-east-1
+      S3_BUCKET: rtools-plugins
+      S3_ACCESS_KEY: rtools_minio
+      S3_SECRET_KEY: rtools_minio_888888
+    ports: ["8787:8787"]
+    volumes:
+      - ..:/workspace
+      - rtools_marketplace_keys:/keys
+    depends_on:
+      mysql:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+  minio:
+    image: minio/minio:latest
+    container_name: rtools-marketplace-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: rtools_minio
+      MINIO_ROOT_PASSWORD: rtools_minio_888888
+    ports: ["9000:9000", "9001:9001"]
+    volumes: ["rtools_minio_data:/data"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+volumes:
+  rtools_mysql_data:
+  rtools_minio_data:
+  rtools_marketplace_keys:
